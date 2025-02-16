@@ -7,41 +7,74 @@ from tqdm.auto import trange
 
 class BanditsManager:
     """
-        Manager for single-state environments, such as Multi-Armed Bandits
+    Manager for single-state environments, such as Multi-Armed Bandits.
+    Manages interaction between an environment and learning agent over multiple rounds.
+
+    Tracks agent performance metrics including:
+    - Actions taken
+    - Rewards received
+    - Optimal actions for each round (maybe useful for non-stationary envs)
+    - Optimal expected rewards
+
+    Attributes:
+        environment: Multi-armed bandit environment
+        agent: Bandit learning agent
+        n_rounds (int): Number of rounds to run
     """
+
     def __init__(self, environment, agent, *, n_rounds: int = 1000):
+        """
+        Initialize experiment manager.
+
+        Args:
+            environment: Bandit environment implementing step(action) method
+            agent: Learning agent implementing do_action() and observe(reward)
+            n_rounds: Number of interaction rounds to run
+        """
+
         self.environment = environment
         self.agent = agent
         self.n_rounds = n_rounds
 
-        self._agent_actions = []
-        self._optimal_actions = []
-        self._rewards = []
-        self._optimal_rewards = []
+        self._agent_actions = np.zeros(n_rounds, np.int64)
+        self._optimal_actions = np.zeros(n_rounds, np.int64)
+        self._rewards = np.zeros(n_rounds, np.float64)
+        self._optimal_rewards = np.zeros(n_rounds, np.float64)
 
     def run(self):
+        """
+        Execute the bandit experiment.
+
+        Returns:
+            dict: Experiment statistics with keys:
+                - agent_actions: Array of actions taken (shape: [n_rounds])
+                - rewards: Array of received rewards (shape: [n_rounds])
+                - optimal_actions: Array of optimal actions (shape: [n_rounds])
+                - optimal_rewards: Array of optimal possible rewards (shape: [n_rounds])
+        """
+
         for i in range(self.n_rounds):
             a = self.agent.do_action()
             r, (a_opt, r_exp) = self.environment.step(a, return_optimal=True)
             self.agent.observe(r)
 
-            self._agent_actions.append(a)
-            self._optimal_actions.append(a_opt)
-            self._rewards.append(r)
-            self._optimal_rewards.append(r_exp)
+            self._agent_actions[i] = a
+            self._optimal_actions[i] = a_opt
+            self._rewards[i] = r
+            self._optimal_rewards[i] = r_exp
 
         return {
-            "agent_actions": np.array(self._agent_actions),
-            "optimal_actions": np.array(self._optimal_actions),
-            "rewards": np.array(self._rewards),
-            "optimal_rewards": np.array(self._optimal_rewards)
+            "agent_actions": self._agent_actions,
+            "rewards": self._rewards,
+            "optimal_actions": self._optimal_actions,
+            "optimal_rewards": self._optimal_rewards,
         }
 
 
 def _get_average_performance_thread(environment, agent, n_rounds, n_runs):
-    rewards_sum = np.zeros(n_rounds, dtype=np.float64)
-    optimal_actions_rate = np.zeros(n_rounds, dtype=np.int64)
-    optimal_rewards = np.zeros(n_rounds, dtype=np.float64)
+    rewards_sum = np.zeros(n_rounds, np.float64)
+    optimal_actions_rate = np.zeros(n_rounds, np.int64)
+    optimal_rewards = np.zeros(n_rounds, np.float64)
 
     for _ in range(n_runs):
         environment.reset()
@@ -51,7 +84,9 @@ def _get_average_performance_thread(environment, agent, n_rounds, n_runs):
         optimal_actions_rate += (stats["agent_actions"] == stats["optimal_actions"])
         optimal_rewards += stats["optimal_rewards"]
 
-    return rewards_sum, optimal_actions_rate, optimal_rewards
+    cumulative_regret = np.cumsum(optimal_rewards - rewards_sum)
+
+    return rewards_sum, optimal_actions_rate, optimal_rewards, cumulative_regret
 
 
 def get_average_performance(
@@ -63,6 +98,25 @@ def get_average_performance(
         threads: int = 1,
         verbose: bool = False
 ):
+    """
+    Calculate average performance metrics over multiple runs.
+
+    Args:
+        environment: Bandit environment to use
+        agent: Learning agent to test
+        n_rounds: Number of rounds per experiment
+        n_runs: Total number of experiment runs
+        threads: Number of parallel processes to use
+        verbose: Show progress bar when using single thread
+
+    Returns:
+        dict: Average performance metrics with keys:
+            - average_rewards: Mean reward per round (shape: [n_rounds])
+            - optimal_actions_rate: Optimal action selection rate (shape: [n_rounds])
+            - average_optimal_rewards: Mean optimal rewards (shape: [n_rounds])
+            - cumulative_regret: Cumulative regret over time (shape: [n_rounds])
+    """
+
     if threads == 1:
         rewards_sum = np.zeros(n_rounds, dtype=np.float64)
         optimal_actions_rate = np.zeros(n_rounds, dtype=np.int64)
@@ -77,10 +131,13 @@ def get_average_performance(
             optimal_actions_rate += (stats["agent_actions"] == stats["optimal_actions"])
             optimal_rewards += stats["optimal_rewards"]
 
+        cumulative_regret = np.cumsum(optimal_rewards - rewards_sum)
+
         return {
             "average_rewards": rewards_sum / n_runs,
             "optimal_actions_rate": optimal_actions_rate / n_runs,
-            "average_optimal_rewards": optimal_rewards / n_runs
+            "average_optimal_rewards": optimal_rewards / n_runs,
+            "cumulative_regret": cumulative_regret / n_runs,
         }
     else:
         n_runs_per_thread = np.ones(threads, dtype=int) * (n_runs // threads)
@@ -100,5 +157,6 @@ def get_average_performance(
         return {
             "average_rewards": res_threads[0] / n_runs,
             "optimal_actions_rate": res_threads[1] / n_runs,
-            "average_optimal_rewards": res_threads[2] / n_runs
+            "average_optimal_rewards": res_threads[2] / n_runs,
+            "cumulative_regret": res_threads[3] / n_runs,
         }

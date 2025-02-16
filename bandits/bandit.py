@@ -1,10 +1,34 @@
+from collections.abc import Collection
+from numbers import Real
+from typing import Literal
+
 import numpy as np
 import scipy.stats as ss
 
+
+DistributionName = Literal[
+    "bernoulli",
+    "binom",
+    "binomial",
+    "cauchy",
+    "expon",
+    "exponential",
+    "gaussian",
+    "geom",
+    "laplace",
+    "norm",
+    "poisson",
+    "uniform",
+]
+DistributionInfo = tuple[DistributionName, dict[str, Real]]
+
+
 DISTRIBUTIONS = {
     "bernoulli": ss.bernoulli,
+    "binom": ss.binom,
     "binomial": ss.binom,
     "cauchy": ss.cauchy,
+    "expon": ss.expon,
     "exponential": ss.expon,
     "gaussian": ss.norm,
     "geom": ss.geom,
@@ -16,67 +40,152 @@ DISTRIBUTIONS = {
 
 
 class MultiArmedBandit:
+    """
+    A configurable multi-armed bandit environment with parametric distributions.
+
+    Can be initialized either with:
+    - A collection of pre-configured arms (distribution + parameters), or
+    - A common distribution type with different parameters for each arm
+
+    Attributes:
+        n_arms (int): Number of arms in the bandit
+        seed (int | None): Random seed for reproducibility
+        action_values (np.ndarray): Array of expected rewards for each arm
+        optimal_action_reward (tuple[int, float]): Tuple containing:
+            - Index of the optimal arm
+            - Expected reward of the optimal arm
+    """
+
     def __init__(
             self,
-            arms = None,
+            arms: Collection[DistributionInfo] | None = None,
             *,
-            distr_name: str | None = None,
-            params = None,
+            distribution: DistributionName | None = None,
+            params: Collection[Real | Collection[Real] | dict[str, Real]] | None = None,
             seed: int | None = None
     ):
+        """
+        Initialize the multi-armed bandit.
+
+        Args:
+            arms: Collection of arm configurations as (distribution, parameters) tuples.
+                Mutually exclusive with distribution/params.
+            distribution: Common distribution type for all arms. Requires params.
+            params: Collection of parameter sets for the common distribution.
+                Each element can be a number, collection of numbers, or parameter dict.
+            seed: Random seed for reproducible arm pulls.
+
+        Raises:
+            ValueError: On conflicting initialization parameters or unsupported distributions.
+        """
+
         if arms is not None:
-            if distr_name is not None or params is not None:
+            if distribution is not None or params is not None:
                 raise ValueError(
-                    "Cannot specify both 'arms' and any of 'distr_name' or 'params'"
+                    "Cannot specify both 'arms' and any of 'distribution' or 'params'"
                 )
-        elif distr_name is None or params is None:
-            raise ValueError("Need to specify 'arms' or 'distr_name' and 'params'")
+        elif distribution is None or params is None:
+            raise ValueError("Need to specify 'arms' or 'distribution' and 'params'")
         else:
-            if distr_name not in DISTRIBUTIONS:
-                raise ValueError(f"Unsupported distr_name {distr_name}")
-            distr = DISTRIBUTIONS[distr_name]
-            arms = [(distr_name, self._parse_shape_params(distr, ps)) for ps in params]
+            if distribution not in DISTRIBUTIONS:
+                raise ValueError(f"Unsupported distribution '{distribution}'")
+            arms = [
+                (distribution, self._parse_shape_params(distribution, ps))
+                for ps in params
+            ]
 
-        self.arms = arms
+        self._arms = [DISTRIBUTIONS[distr_name](**ps) for distr_name, ps in arms]
+        self._arm_descriptions = arms
+
         self.seed = seed
+        self.n_arms = len(self._arms)
+        self._rng = None
 
-        self.n_arms = len(arms)
-        self.rng = None
+        self.reset(self.seed)
 
-        self.reset(seed=self.seed)
+    def __str__(self) -> str:
+        arms_str = ",\n".join(
+            f"    {distr_name.capitalize()}({', '.join(f'{k}={v}' for k, v in ps.items())})"
+            for distr_name, ps in self._arm_descriptions
+        )
+        return f"MultiArmedBandit(\n{arms_str}\n)"
 
-    def reset(self, *, seed: int | None = None):
-        self.rng = np.random.default_rng(seed)
+    def __repr__(self) -> str:
+        arms_str = ",\n".join(
+            f"    ('{distr_name}', {{{', '.join(f'\'{k}\': {v}' for k, v in ps.items())}}})"
+            for distr_name, ps in self._arm_descriptions
+        )
+        return f"MultiArmedBandit([\n{arms_str}\n])"
+
+    def reset(self, seed: int | None = None):
+        """
+        Reset the bandit's random number generator.
+
+        Args:
+            seed (int): New random seed. Use None for non-reproducible randomness.
+        """
+        self._rng = np.random.default_rng(seed)
 
     def pull(self, action: int):
-        if not (0 <= action < self.n_arms):
-            raise ValueError(f"'action' must be in range [0, {self.n_arms})")
+        """
+        Pull the specified arm and get the reward.
 
-        distr_name, params = self.arms[action]
-        return DISTRIBUTIONS[distr_name].rvs(**params, random_state=self.rng)
+        Args:
+            action (int): Index of the arm to pull (0-based)
 
-    def step(self, action: int, return_optimal: bool = False):
+        Returns:
+            float: Sampled reward from the selected arm
+
+        Raises:
+            IndexError: If action is out of bounds
+        """
+        return self._arms[action].rvs(random_state=self._rng)
+
+    def step(self, action: int, *, return_optimal: bool = False):
+        """
+        Pull an arm and optionally return optimal action info.
+
+        Args:
+            action (int): Index of the arm to pull
+            return_optimal (bool): Whether to return optimal action information (default `False`)
+
+        Returns:
+            float: If return_optimal=False
+            tuple[float, tuple[int, float]]: If return_optimal=True, returns
+                (reward, (optimal_action, optimal_reward))
+        """
+
+        reward = self.pull(action)
         if return_optimal:
-            a_opt, r_exp = self.optimal_action_reward
-            return self.pull(action), (a_opt, r_exp)
-        else:
-            return self.pull(action)
+            return reward, self.optimal_action_reward
+        return reward
+
+    @property
+    def action_values(self):
+        """np.ndarray: Expected rewards for each arm (distribution means)."""
+        return np.array([distr.mean() for distr in self._arms])
 
     @property
     def optimal_action_reward(self):
-        means = [DISTRIBUTIONS[distr_name].mean(**params) for distr_name, params in self.arms]
+        """tuple[int, float]: Optimal arm index and its expected reward."""
+
+        means = self.action_values
         a_opt = np.argmax(means)
         r_exp = means[a_opt]
         return a_opt, r_exp
 
     @staticmethod
     def _parse_shape_params(
-            distr: ss.rv_continuous | ss.rv_discrete,
-            params: int | float | tuple | list
-    ) -> dict[str, int | float]:
-        if isinstance(params, (int, float)):
-            params = (params,)
+            distribution_name: DistributionName,
+            params: Real | Collection[Real] | dict[str, Real],
+    ) -> dict[str, Real]:
+        if isinstance(params, dict):
+            return params
 
+        if isinstance(params, Real):
+            params = [params]
+
+        distr = DISTRIBUTIONS[distribution_name]
         shape_kwrds = distr.shapes.split(', ') if distr.shapes is not None else []
         if isinstance(distr, ss.rv_continuous):
             shape_kwrds += ["loc", "scale"]
@@ -99,14 +208,26 @@ class AdversarialBandit(NonStationaryBandit):
 
 if __name__ == '__main__':
     bandits = [
-        MultiArmedBandit(distr_name="bernoulli", params=[0.9, 0.6]),
-        MultiArmedBandit(distr_name="binomial", params=[(10, 0.4), (5, 0.8), (1, 1.0, 4), (3, 0.0, 1.5)]),
-        MultiArmedBandit(distr_name="cauchy", params=[-1, 0, (1, 2)]),
-        MultiArmedBandit(distr_name="exponential", params=[-1, 0, 1])
+        MultiArmedBandit(distribution="bernoulli", params=[0.9, 0.6, 0.0, 1.0]),
+        MultiArmedBandit(
+            distribution="binomial",
+            params=[(5, 0.8), {"n": 1, "p": 1.0, "loc": 4}, [3, 0.0, -2]]
+        ),
+        MultiArmedBandit(distribution="cauchy", params=[0, (1, 2), (), [], {"scale": 3.5}]),
+        MultiArmedBandit(distribution="gaussian", params=[()] * 3),
+        MultiArmedBandit(
+            [
+                ("bernoulli", {"p": 0.5}),
+                ("binomial", {"n": 5, "p": 0.1}),
+                ("norm", {"loc": 0.5, "scale": 1.0}),
+                ("uniform", {}),
+            ],
+        )
     ]
     for b in bandits:
-        for a in range(b.n_arms):
-            print(b.pull(a), end=' ')
-        print()
-    # for distr in DISTRIBUTIONS.values():
-    #     print(distr.name, distr.shapes)
+        print(b)
+        print(repr(b))
+        print([b.pull(a) for a in range(b.n_arms)])
+        print([b.step(a) for a in range(b.n_arms)])
+        print(b.action_values)
+        print(b.optimal_action_reward)
