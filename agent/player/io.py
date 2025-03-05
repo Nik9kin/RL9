@@ -1,9 +1,8 @@
 from typing import Any, Callable
 
-import numpy as np
 from IPython.display import clear_output
 
-from games.base import BasePlayer, BaseState
+from game.core.base import BaseGameState, BasePlayer
 
 
 class IOPlayer(BasePlayer):
@@ -11,7 +10,7 @@ class IOPlayer(BasePlayer):
         self.from_str = from_str
         self.clear_outputs = clear_outputs
 
-    def do_action(self, state: BaseState) -> Any:
+    def do_action(self, state: BaseGameState) -> Any:
         if self.clear_outputs:
             clear_output()
         print("Current state:")
@@ -19,11 +18,11 @@ class IOPlayer(BasePlayer):
         action = input("Your action: ")
         return self.from_str(action)
 
-    def observe(self, reward: int, final_state: BaseState | None = None) -> None:
+    def observe(self, reward: int, final_state: BaseGameState | None = None) -> None:
         if self.clear_outputs:
             clear_output()
         if reward == 1:
-            print("You are win!")
+            print("You win!")
         elif reward == 0:
             print("It`s a draw.")
         else:
@@ -31,12 +30,3 @@ class IOPlayer(BasePlayer):
         if final_state is not None:
             print("Final state:")
             print(final_state)
-
-
-class RandomPlayer(BasePlayer):
-    def __init__(self, seed: int | None = None):
-        self.seed = seed
-        self._rng = np.random.default_rng(seed)
-
-    def do_action(self, state: BaseState) -> Any:
-        return self._rng.choice(state.actions)

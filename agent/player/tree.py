@@ -1,12 +1,12 @@
 from copy import deepcopy
 from typing import Any
 
-from games.base import BasePlayer, BaseState, BaseGame
+from game.core.base import BasePlayer, BaseGameState, BaseGame
 
 
 class TreeSearch(BasePlayer):
     def __init__(self, *, verbose: bool = False):
-        self._state_value: dict[BaseState, int] = {}
+        self._state_value: dict[BaseGameState, int] = {}
         self._verbose = verbose
         self._verbosity_next_size = 10
 
@@ -16,7 +16,7 @@ class TreeSearch(BasePlayer):
         if self._verbose:
             print(f"Found {len(self._state_value)} states in total.")
 
-    def do_action(self, state: BaseState) -> Any:
+    def do_action(self, state: BaseGameState) -> Any:
         if not self._state_value:
             raise NotFittedError("Model is not fitted yet")
 
@@ -26,7 +26,7 @@ class TreeSearch(BasePlayer):
         _, action = max((-self._state_value[state.next(a)], a) for a in state.actions)
         return action
 
-    def _dfs(self, state: BaseState) -> int:
+    def _dfs(self, state: BaseGameState) -> int:
         if state not in self._state_value:
             if state.is_terminal:
                 winner = state.winner
