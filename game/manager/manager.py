@@ -1,6 +1,6 @@
 import numpy as np
 
-from games.base import BaseGame, BasePlayer
+from ..core.base import BaseGame, BasePlayer
 
 
 class GameManager:
@@ -22,17 +22,9 @@ class GameManager:
             action = self.players[self.game.turn0].do_action(state)
             state = self.game.step(action)
 
-        winner = self.game.winner
-        if winner is None:
-            for player in self.players:
-                player.observe(0, state)
-        else:
-            for i, player in enumerate(self.players):
-                if i == winner - 1:
-                    player.observe(1, state)
-                else:
-                    player.observe(-1, state)
-        return winner
+        for player, reward in zip(self.players, self.game.rewards):
+            player.observe(reward, state)
+        return self.game.winner
 
     def run(self):
         for i in range(self.n_plays):
