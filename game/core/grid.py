@@ -2,7 +2,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, replace
 from numbers import Integral
-from typing import Any, ClassVar, Collection
+from typing import Any, ClassVar, Collection, Generator
 
 import numpy as np
 from numpy.typing import NDArray
@@ -29,7 +29,10 @@ class RectangularGridTwoPlayerState(BaseGameState, ABC):
         return hash(tuple(self.grid.flatten().tolist()))
 
     def __str__(self) -> str:
-        return "\n".join('|'.join(self._str_mapping[i] for i in row) for row in self.grid)
+        return "\n".join(self.__list_str__())
+
+    def __list_str__(self) -> Generator[str]:
+        return ('|'.join(self._str_mapping[i] for i in row) for row in self.grid)
 
     def next(self, action: Collection[Integral]):
         if not isinstance(action, Collection) or len(action) != 2:
