@@ -12,9 +12,18 @@ from ..core.grid import RectangularGridTwoPlayerState
 
 @dataclass(eq=False)
 class KInARowGameState(RectangularGridTwoPlayerState):
+    """
+    Game state for k-in-a-row games.
+
+    Attributes:
+        k: Number of consecutive marks required to win
+    """
+
     k: int
 
     def is_winner(self, player: int):
+        """Check if player has k consecutive marks in any direction."""
+
         if player not in [1, 2]:
             raise ValueError("'player' must be 1-based index of player")
         bool_grid = (self.grid == player)
@@ -30,6 +39,8 @@ class KInARowGameState(RectangularGridTwoPlayerState):
 
 
 class KInARowGame(BaseGame):
+    """Generalized k-in-a-row game implementation."""
+
     def __init__(self, rows: int, cols: int, k: int, *, state_class: type = KInARowGameState):
         super().__init__(state_class=state_class)
         self.rows = rows
@@ -45,6 +56,8 @@ class KInARowGame(BaseGame):
         self._turn = 1
 
     def reset(self) -> None:
+        """Reset game to initial empty state."""
+
         self._state = self._state_class(
             grid=np.zeros((self.rows, self.cols), dtype=np.int_),
             k=self.k,
