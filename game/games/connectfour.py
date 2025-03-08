@@ -18,15 +18,17 @@ class ConnectFourState(KInARowGameState):
             return super().__str__()
 
         if cols <= 10:
-            col_ticks_func = lambda n: f'{n:<2d}'
+            def col_label_to_str(n: int):
+                return f'{n:<2d}'
             n_col_ticks = cols
             arr_sign = 'v '
         else:
-            col_ticks_func = lambda n: f'{n:<2d}' if (n % 2) == 0 else '  '
+            def col_label_to_str(n: int):
+                return '  ' if n % 2 else f'{n:<2d}'
             n_col_ticks = (cols + 1) // 2
             arr_sign = 'v   '
 
-        col_ticks = list(map(col_ticks_func, range(cols)))
+        col_ticks = list(map(col_label_to_str, range(cols)))
 
         first_row = ' ' + ''.join(col_ticks) + '\n'
         second_row = ' ' + arr_sign * n_col_ticks + '\n'
