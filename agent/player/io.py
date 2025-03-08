@@ -7,11 +7,12 @@ from game.core.base import BaseGameState, BasePlayer
 
 class IOPlayer(BasePlayer):
     def __init__(self, from_str: Callable[[str], Any] | str, *, clear_outputs: bool = False):
+        self.from_str: Callable[[str], Any]
         if from_str == 'int':
             self.from_str = int
         elif from_str == 'list[int]':
             self.from_str = lambda s: list(map(int, s.split()))
-        elif isinstance(from_str, Callable):
+        elif callable(from_str):
             self.from_str = from_str
         else:
             raise ValueError('"from_str" not recognized')
