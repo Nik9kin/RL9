@@ -1,10 +1,12 @@
 from copy import deepcopy
 from typing import Any
 
+import numpy as np
+
 from game.core.base import BasePlayer, BaseGameState, BaseGame
 
 
-class TreeSearch(BasePlayer):
+class DFSPlayer(BasePlayer):
     def __init__(self, *, verbose: bool = False):
         self._state_value: dict[BaseGameState, int] = {}
         self._verbose = verbose
@@ -42,6 +44,28 @@ class TreeSearch(BasePlayer):
                 print(f"Found {self._verbosity_next_size} states.")
                 self._verbosity_next_size *= 10
         return self._state_value[state]
+
+
+class BFSPlayer(BasePlayer):
+    def __init__(self, depth: int):
+        self.depth = depth
+
+    def do_action(self, state: BaseGameState) -> Any:
+        actions = state.actions
+        values = np.array([-self._bfs(state, a, self.depth - 1) for a in actions])
+        return actions[np.random.choice(np.argwhere(values == values.max()).flatten())]
+
+    def _bfs(self, state: BaseGameState, action: Any, depth: int):
+        state = state.next(action)
+        if state.is_terminal:
+            winner = state.winner
+            if winner is None:
+                return 0
+            else:
+                return 2 * int(winner == state.turn) - 1
+        elif depth == 0:
+            return 0
+        return max(-self._bfs(state, action, depth - 1) for action in state.actions)
 
 
 class NotFittedError(AttributeError):
