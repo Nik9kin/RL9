@@ -13,6 +13,13 @@ from .exception import IllegalActionError
 
 @dataclass
 class RectangularGridTwoPlayerState(BaseGameState, ABC):
+    """
+    Represents a game state for two-player grid-based games.
+
+    Attributes:
+        grid: 2D numpy array representing the game board.
+    """
+
     grid: NDArray[np.int_]
     _str_mapping: ClassVar[dict[int, str]] = {0: '_', 1: 'x', 2: 'o'}
 
@@ -35,6 +42,16 @@ class RectangularGridTwoPlayerState(BaseGameState, ABC):
         return ('|'.join(self._str_mapping[i] for i in row) for row in self.grid)
 
     def next(self, action: Collection[Integral]):
+        """
+        Create next state by placing current player's mark at action position.
+
+        Args:
+            action: (row, column) tuple indicating placement position
+
+        Raises:
+            IllegalActionError: If position is occupied or invalid
+        """
+
         if not isinstance(action, Collection) or len(action) != 2:
             raise IllegalActionError("unrecognized action format")
         if self.grid[*action] != 0:
@@ -45,28 +62,32 @@ class RectangularGridTwoPlayerState(BaseGameState, ABC):
 
     @property
     def actions(self) -> Any:
+        """List of valid (row, column) positions as lists."""
         return np.argwhere(self.grid == 0).tolist()
 
     @property
     def is_filled(self) -> bool:
+        """Check if grid has no empty cells."""
         return bool(np.all(self.grid))
 
     @property
     def is_terminal(self) -> bool:
+        """Check if game has concluded (win or draw)."""
         return self.is_filled or self.is_winner(1) or self.is_winner(2)
 
     @property
     def turn(self) -> int:
-        # 1-based index of current player
+        """Current player's turn (1-based index)."""
         return self.turn0 + 1
 
     @property
     def turn0(self) -> int:
-        # 0-based index of current player
+        """Current player's turn (0-based index)."""
         return self.grid.sum() % 3
 
     @property
     def winner(self) -> int | None:
+        """Get winning player or None for draw. Raises error if game ongoing."""
         for player in [1, 2]:
             if self.is_winner(player):
                 return player

@@ -10,6 +10,8 @@ from .kinrow import KInARowGameState, KInARowGame
 
 @dataclass(eq=False)
 class ConnectFourState(KInARowGameState):
+    """Connect Four game state with column-based piece placement and 4-in-a-row win condition."""
+
     k: int = 4
 
     def __str__(self) -> str:
@@ -47,6 +49,16 @@ class ConnectFourState(KInARowGameState):
         return sep + sep.join(iterable) + sep
 
     def next(self, action: Integral | Collection[Integral]):
+        """
+        Handle column-based piece placement.
+
+        Args:
+            action: Column index or (row, column) tuple
+
+        Returns:
+            New state with piece placed in lowest available row
+        """
+
         if isinstance(action, Integral):
             col = action
             if self.grid[0, col] != 0:
@@ -57,9 +69,12 @@ class ConnectFourState(KInARowGameState):
 
     @property
     def actions(self) -> list[int]:
+        """List of valid column indices with available space."""
         return np.argwhere(self.grid[0] == 0).flatten().tolist()
 
 
 class ConnectFour(KInARowGame):
+    """Connect Four game implementation with 6x7 grid by default."""
+
     def __init__(self, rows: int = 6, cols: int = 7, *, state_class: type = ConnectFourState):
         super().__init__(rows, cols, 4, state_class=state_class)
