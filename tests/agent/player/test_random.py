@@ -1,6 +1,6 @@
 from unittest.mock import Mock
 
-from agent.player.random import RandomPlayer
+from agent.player.random_ import RandomPlayer
 
 
 def test_random_player_valid_action():

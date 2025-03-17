@@ -70,6 +70,8 @@ class GameManager:
                 self._winners_roles[i] = winner_role
                 self._winners_matrix[winner_role, winner_player] += 1
             self.game.reset()
+            for player in self.players:
+                player.reset()
             if self.shuffling == 'circular':
                 self._order = np.hstack((self._order[1:], self._order[:1]))
             elif self.shuffling == 'random':

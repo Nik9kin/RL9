@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from numbers import Integral
-from typing import Collection, Iterable
+from typing import Iterable
 
 import numpy as np
 
 from ..core.exception import IllegalActionError
+from ..core.grid import IntPair
 from .kinrow import KInARowGameState, KInARowGame
 
 
@@ -48,7 +48,17 @@ class ConnectFourState(KInARowGameState):
     def _join(sep: str, iterable: Iterable[str]):
         return sep + sep.join(iterable) + sep
 
-    def next(self, action: Integral | Collection[Integral]):
+    def _validate_action(self, action: int | IntPair) -> None:
+        if isinstance(action, int):
+            if self.grid[0, action] != 0:
+                raise IllegalActionError("attempt to make a move into a filled column")
+        else:
+            super()._validate_action(action)
+            row, col = action
+            if row + 1 < self.grid.shape[0] and self.grid[row + 1, col] == 0:
+                raise IllegalActionError("move can only be made to the bottom of the column")
+
+    def next(self, action: int | IntPair, *, inplace: bool = False):
         """
         Handle column-based piece placement.
 
@@ -56,16 +66,16 @@ class ConnectFourState(KInARowGameState):
             action: Column index or (row, column) tuple
 
         Returns:
-            New state with piece placed in lowest available row
+            New state with piece placed in the lowest available row
         """
+        self._validate_action(action)
 
-        if isinstance(action, Integral):
+        if isinstance(action, int):
             col = action
-            if self.grid[0, col] != 0:
-                raise IllegalActionError("attempt to make a move into a filled column")
             row = np.sum(self.grid[:, col] == 0) - 1
             action = (row, col)
-        return super().next(action)
+
+        return self._next_no_val(action, inplace=inplace)
 
     @property
     def actions(self) -> list[int]:

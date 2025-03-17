@@ -1,5 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from typing import Any
 
 
@@ -20,7 +21,7 @@ class BaseGameState(ABC):
         ...
 
     @abstractmethod
-    def next(self, action: Any) -> BaseGameState:
+    def next(self, action: Any, *, inplace: bool = False) -> BaseGameState:
         """Generate next state after applying action."""
         ...
 
@@ -106,7 +107,7 @@ class BaseGame(ABC):
     @property
     def state(self) -> BaseGameState:
         """Current game state."""
-        return self._state
+        return deepcopy(self._state)
 
     @property
     def turn(self) -> int:
@@ -137,4 +138,7 @@ class BasePlayer(ABC):
 
     def observe(self, reward: int, final_state: BaseGameState | None = None) -> None:
         """Receive game outcome observation."""
+        pass
+
+    def reset(self) -> None:
         pass

@@ -1,13 +1,12 @@
+from copy import deepcopy
 from dataclasses import dataclass
-from numbers import Integral
-from typing import Collection
 
 import numpy as np
-from scipy.signal import convolve
+import scipy.signal as sig
 
 from ..core.base import BaseGame
 from ..core.exception import GameProcessError
-from ..core.grid import RectangularGridTwoPlayerState
+from ..core.grid import RectangularGridTwoPlayerState, IntPair
 
 
 @dataclass(eq=False)
@@ -21,21 +20,35 @@ class KInARowGameState(RectangularGridTwoPlayerState):
 
     k: int
 
-    def is_winner(self, player: int):
+    def is_winner(self, player: int) -> bool:
         """Check if player has k consecutive marks in any direction."""
 
-        if player not in [1, 2]:
-            raise ValueError("'player' must be 1-based index of player")
+        if self.last_action is None:
+            bool_grid = (self.grid == player)
+            return any(
+                np.any(sig.convolve(bool_grid, kernel, mode="valid", method="direct") == self.k)
+                for kernel in [
+                    np.ones((1, self.k)),
+                    np.ones((self.k, 1)),
+                    np.eye(self.k),
+                    np.fliplr(np.eye(self.k)),
+                ]
+            )
+
+        if self.grid[*self.last_action] != player:
+            return False
+
+        row, col = self.last_action
         bool_grid = (self.grid == player)
-        return np.any([
-            np.any(convolve(bool_grid, kernel, mode="valid", method="direct") == self.k)
-            for kernel in [
-                np.ones((1, self.k)),
-                np.ones((self.k, 1)),
-                np.eye(self.k),
-                np.fliplr(np.eye(self.k))
+        return any(
+            np.any(np.convolve(slice_, np.ones(self.k), mode="valid") == self.k)
+            for slice_ in [
+                bool_grid[row, :],
+                bool_grid[:, col],
+                np.diagonal(bool_grid, col - row),
+                np.diagonal(np.fliplr(bool_grid), self.grid.shape[1] - col - row - 1)
             ]
-        ])
+        )
 
 
 class KInARowGame(BaseGame):
@@ -53,7 +66,6 @@ class KInARowGame(BaseGame):
         self._n_players = 2
         self._is_terminated = False
         self._winner = None
-        self._turn = 1
 
     def reset(self) -> None:
         """Reset game to initial empty state."""
@@ -64,28 +76,18 @@ class KInARowGame(BaseGame):
         )
         self._is_terminated = False
         self._winner = None
-        self._turn = 1
 
     def start(self) -> KInARowGameState:
-        if self._state.grid.sum() != 0:
+        if np.any(self._state.grid != 0):
             raise GameProcessError("game already started")
-        return self._state
+        return deepcopy(self._state)
 
-    def step(self, action: Collection[Integral]) -> KInARowGameState:
+    def step(self, action: IntPair) -> KInARowGameState:
         if self._is_terminated:
             raise GameProcessError("game already finished")
 
-        self._state = self._state.next(action)
+        self._state.next(action, inplace=True)
         self._is_terminated = self._state.is_terminal
-        if self._is_terminated and self._state.is_winner(self._turn):
-            self._winner = self._turn
-        self._turn = 3 - self._turn
-        return self._state
-
-    @property
-    def turn(self) -> int:
-        return self._turn
-
-    @property
-    def turn0(self) -> int:
-        return self._turn - 1
+        if self._is_terminated:
+            self._winner = self._state.winner
+        return deepcopy(self._state)

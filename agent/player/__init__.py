@@ -1,5 +1,5 @@
 from .io import IOPlayer
-from .random import RandomPlayer
+from .random_ import RandomPlayer
 from .tree import BFSPlayer, DFSPlayer
 
 __all__ = [
