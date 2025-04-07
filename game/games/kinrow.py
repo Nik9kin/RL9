@@ -91,3 +91,7 @@ class KInARowGame(BaseGame):
         if self._is_terminated:
             self._winner = self._state.winner
         return deepcopy(self._state)
+
+    @property
+    def roles_descriptions(self) -> list[str]:
+        return ["X`s player", "O`s player"]

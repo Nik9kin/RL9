@@ -18,6 +18,9 @@ class DFSPlayer(BasePlayer):
         self._verbose = verbose
         self._verbosity_next_size = 10
 
+    def __str__(self):
+        return "DFSPlayer"
+
     def fit(self, game: BaseGame):
         """Precompute all possible state values through DFS."""
 
@@ -62,6 +65,9 @@ class BFSPlayer(BasePlayer):
 
     def __init__(self, depth: int):
         self.depth = depth
+
+    def __str__(self):
+        return f"BFS-{self.depth} Player"
 
     def do_action(self, state: BaseGameState) -> Any:
         """Choose action maximizing BFS evaluation up to given depth."""

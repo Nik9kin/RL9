@@ -92,17 +92,21 @@ class BaseGame(ABC):
         return self._n_players
 
     @property
-    def rewards(self) -> tuple[int, ...]:
+    def rewards(self) -> list[int]:
         """Player rewards tuple. Only valid when terminated."""
 
         if not self._is_terminated:
             raise AttributeError("game is ongoing")
         if self._winner is None:
-            return (0,) * self._n_players
+            return [0] * self._n_players
         else:
             rewards = [-1] * self._n_players
             rewards[self._winner - 1] = 1
-            return tuple(rewards)
+            return rewards
+
+    @property
+    def roles_descriptions(self) -> list[str]:
+        return [f"Player # {i + 1}" for i in range(self.n_players)]
 
     @property
     def state(self) -> BaseGameState:

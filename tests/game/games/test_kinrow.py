@@ -241,7 +241,7 @@ def test_game_winner_rewards_0():
     ]:
         game.step(action)
     assert game.winner is None
-    assert game.rewards == (0, 0)
+    assert game.rewards == [0, 0]
 
 
 def test_game_winner_rewards_1():
@@ -255,7 +255,7 @@ def test_game_winner_rewards_1():
         assert game.winner
     for action in [(0, 2), (2, 2)]:
         game.step(action)
-    assert game.rewards == (1, -1)
+    assert game.rewards == [1, -1]
     assert game.winner == 1
 
 
@@ -264,7 +264,7 @@ def test_game_winner_rewards_2():
     game.start()
     for action in [(0, 0), (0, 1), (1, 0), (1, 1), (0, 2), (2, 1)]:
         game.step(action)
-    assert game.rewards == (-1, 1)
+    assert game.rewards == [-1, 1]
     assert game.winner == 2
 
 

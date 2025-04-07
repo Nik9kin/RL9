@@ -12,6 +12,9 @@ class RandomPlayer(BasePlayer):
         self.seed = seed
         self._rng = np.random.default_rng(seed)
 
+    def __str__(self):
+        return "RandomPlayer"
+
     def do_action(self, state: BaseGameState) -> Any:
         """Select random valid action."""
 

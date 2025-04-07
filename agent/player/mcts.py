@@ -62,6 +62,9 @@ class MCTS(BasePlayer):
 
         self.root = MCTSNode(start_state, ucb_c=ucb_c)
 
+    def __str__(self):
+        return f"MCTS(time for action : {self.time_for_action / 10 ** 9:.3f} s)"
+
     def do_action(self, state: BaseGameState) -> Any:
         start_time = time.time_ns()
 

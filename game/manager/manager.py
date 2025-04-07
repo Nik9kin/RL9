@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from tqdm.notebook import trange
 
 from ..core.base import BaseGame, BasePlayer
@@ -21,6 +22,7 @@ class GameManager:
             *players: BasePlayer,
             n_plays: int = 1,
             shuffling: str = 'no',
+            player_labels: list[str] | None = None,
     ):
         self.game = game
         self.players = players
@@ -28,10 +30,14 @@ class GameManager:
         if shuffling not in ['no', 'circular', 'random']:
             raise ValueError('"shuffling" must be one of "no", "circular" or "random"')
         self.shuffling = shuffling
+        if player_labels is None:
+            player_labels = list(map(str, players))
+        self.player_labels = player_labels
+        self.roles_labels = game.roles_descriptions
 
         self._winners_players = np.zeros(n_plays, dtype=np.int_)
         self._winners_roles = np.zeros(n_plays, dtype=np.int_)
-        self._winners_matrix = np.zeros((len(players) + 1, len(players) + 1))
+        self._winners_matrix = np.zeros((len(players) + 1, len(players) + 1), dtype=np.int_)
         self._order = np.arange(len(players), dtype=np.int_)
 
     def run_single_game(self) -> int | None:
@@ -76,8 +82,13 @@ class GameManager:
                 self._order = np.hstack((self._order[1:], self._order[:1]))
             elif self.shuffling == 'random':
                 np.random.shuffle(self._order)
+
         return {
             "winners (players)": self._winners_players,
             "winners (roles)": self._winners_roles,
-            "winners matrix": self._winners_matrix,
+            "winners matrix": pd.DataFrame(
+                self._winners_matrix,
+                ["Draw"] + self.roles_labels,
+                ["Draw"] + self.player_labels,
+            ),
         }
