@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import copy
+import logging
 import time
 from copy import deepcopy
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from agent.player import RandomPlayer
 from game.core.base import BaseGameState, BasePlayer
@@ -36,6 +38,10 @@ class MCTSNode(UCB1):
     def just_select(self):
         return np.argmax(self._value_estimates)
 
+    @property
+    def action_attempts(self):
+        return self._action_attempts
+
 
 class MCTS(BasePlayer):
     def __init__(
@@ -45,6 +51,8 @@ class MCTS(BasePlayer):
             time_for_action: float = 1.0,
             rollout_policy: str | BasePlayer = 'random',
             ucb_c: float = 1.41,
+            logg: bool = False,
+            log_file: str = 'mcts.log'
     ):
         self.start_state = copy.deepcopy(start_state)
         self.time_for_action = int(time_for_action * 10 ** 9)
@@ -59,6 +67,18 @@ class MCTS(BasePlayer):
             self.rollout_policy = rollout_policy
 
         self.ucb_c = ucb_c
+
+        self.logger: logging.Logger | None
+        if logg:
+            self.logger = logging.getLogger(__name__)
+            logging.basicConfig(
+                filename=log_file,
+                filemode='w',
+                format='%(message)s',
+                level=logging.INFO
+            )
+        else:
+            self.logger = None
 
         self.root = MCTSNode(start_state, ucb_c=ucb_c)
 
@@ -85,8 +105,14 @@ class MCTS(BasePlayer):
 
         action_ind = self.root.just_select()
         action = self.root.actions[action_ind]
+        if self.logger:
+            self._log_info()
+            self.logger.info(f"Selected action: {action}")
         self.root = self.root.children[action_ind]
         self.root.parent = None
+        if self.logger:
+            self._log_info()
+            self.logger.info("Opponent turn")
         return action
 
     def reset(self):
@@ -131,9 +157,25 @@ class MCTS(BasePlayer):
 
         raise ValueError(f'State {state} is not reachable by the opponent')
 
+    def _log_info(self):
+        self.logger.info("")
+        self.logger.info(f"Current state:\n{self.root.state}")
+        actions_info = pd.DataFrame(
+            {
+                "Action": self.root.actions,
+                "Value estimate": self.root.value_estimates,
+                "Attempts": self.root.action_attempts,
+            }
+        )
+        self.logger.info(actions_info.to_string(
+            index=False,
+            float_format=lambda x: f"{x:.3f}",
+        ))
+
 
 if __name__ == '__main__':
     connect_four = ConnectFour()
     start = connect_four.start()
-    manager = GameManager(connect_four, IOPlayer('int'), MCTS(start))
+    # manager = GameManager(connect_four, IOPlayer('int'), MCTS(start, logg=True))
+    manager = GameManager(connect_four, MCTS(start, logg=True), IOPlayer('int'))
     manager.run_single_game()
