@@ -11,36 +11,91 @@ import pandas as pd
 
 from agent.player import RandomPlayer
 from game.core.base import BaseGameState, BasePlayer
-from bandits.agent import UCB1
 
 from game import ConnectFour
 from game.manager import GameManager
+from agent.common import select_random_optimal_action
 from agent.player import IOPlayer
 
 
-class MCTSNode(UCB1):
-    def __init__(self, state: BaseGameState, *, parent: MCTSNode | None = None, ucb_c=1.41):
+class MCTSNode:
+    def __init__(
+            self,
+            state: BaseGameState,
+            *,
+            parent: MCTSNode | None = None,
+            ucb_c=1.41,
+    ):
         self.state = state
         self.parent = parent
 
         self.actions = self.state.actions
+        self.n_actions = len(self.actions)
+        self._ucb_c = ucb_c
 
-        super().__init__(len(self.actions), c=ucb_c)
+        self._value_estimates = np.zeros(self.n_actions, dtype=np.float64)
+        self._action_attempts = np.zeros(self.n_actions, dtype=np.int64)
+        self._last_action: int = -1
+        self._t = 0
 
         self.children: list[MCTSNode] = []
 
+        self._is_value_inexact = np.ones(self.n_actions, dtype=np.bool)
+        self.n_inexact_estimates = self.n_actions
+
     def expand(self) -> None:
         self.children = [
-            MCTSNode(self.state.next(action), parent=self, ucb_c=self.c)
+            MCTSNode(self.state.next(action), parent=self, ucb_c=self._ucb_c)
             for action in self.actions
         ]
 
+    def do_action(self) -> int:
+        if self._t < self.n_actions:
+            # Exploring start phase: cycle through actions
+            self._last_action = self._t % self.n_actions
+        else:
+            # UCB1 selection: value + confidence bound
+            exploration_bonus = self._ucb_c * np.sqrt(np.log(self._t) / self._action_attempts)
+            priorities = self._value_estimates + exploration_bonus
+            inexact_actions = np.nonzero(self._is_value_inexact)[0]
+            self._last_action = inexact_actions[np.argmax(priorities[self._is_value_inexact])]
+
+        self._action_attempts[self._last_action] += 1
+        self._t += 1
+        return self._last_action
+
+    def observe(self, reward: int, exact: bool) -> tuple[int, bool]:
+        a = self._last_action
+        if exact:
+            self._value_estimates[a] = reward
+            self._is_value_inexact[a] = False
+            self.n_inexact_estimates -= 1
+            if reward == 1:
+                return -1, True
+            elif self.n_inexact_estimates == 0:
+                return -self._value_estimates.max(), True
+            else:
+                return -reward, False
+        else:
+            step_size = 1 / self._action_attempts[a]
+            self._value_estimates[a] += step_size * (reward - self._value_estimates[a])
+            return -reward, False
+
     def just_select(self):
-        return np.argmax(self._value_estimates)
+        return select_random_optimal_action(self._value_estimates, list(range(self.n_actions)))
 
     @property
     def action_attempts(self):
         return self._action_attempts
+
+    @property
+    def value_estimates(self):
+        """np.ndarray: Current estimates of the value of each action."""
+        return self._value_estimates
+
+    @property
+    def is_value_exact(self):
+        return ~self._is_value_inexact
 
 
 class MCTS(BasePlayer):
@@ -95,13 +150,22 @@ class MCTS(BasePlayer):
         if not self.root.children:
             self.root.expand()
 
-        while time.time_ns() - start_time < self.time_for_action:
+        while self.root.n_inexact_estimates and time.time_ns() - start_time < self.time_for_action:
             leaf = self._select_leaf()
             if not leaf.state.is_terminal:
                 leaf.expand()
                 leaf = leaf.children[leaf.do_action()]
-            reward = self._rollout(leaf)
-            self._backprop(leaf, reward)
+            if leaf.state.is_terminal:
+                winner = leaf.state.winner
+                if winner is None:
+                    reward = 0
+                else:
+                    reward = 2 * int(winner == leaf.state.turn) - 1
+                exact = True
+            else:
+                reward = self._rollout(leaf)
+                exact = False
+            self._backprop(leaf, reward, exact)
 
         action_ind = self.root.just_select()
         action = self.root.actions[action_ind]
@@ -138,11 +202,11 @@ class MCTS(BasePlayer):
             return 2 * int(winner == start_state_player) - 1
 
     @staticmethod
-    def _backprop(node: MCTSNode, reward: int):
+    def _backprop(node: MCTSNode, reward: int, exact: bool):
+        reward = -reward
         while node.parent is not None:
             node = node.parent
-            reward = -reward
-            node.observe(reward)
+            reward, exact = node.observe(reward, exact)
 
     def _find_node(self, state: BaseGameState) -> MCTSNode:
         if self.root.state == state:
@@ -165,6 +229,7 @@ class MCTS(BasePlayer):
                 "Action": self.root.actions,
                 "Value estimate": self.root.value_estimates,
                 "Attempts": self.root.action_attempts,
+                "Is exact": self.root.is_value_exact,
             }
         )
         self.logger.info(actions_info.to_string(
@@ -176,6 +241,15 @@ class MCTS(BasePlayer):
 if __name__ == '__main__':
     connect_four = ConnectFour()
     start = connect_four.start()
-    # manager = GameManager(connect_four, IOPlayer('int'), MCTS(start, logg=True))
-    manager = GameManager(connect_four, MCTS(start, logg=True), IOPlayer('int'))
+    manager = GameManager(connect_four, IOPlayer('int'), MCTS(start, logg=True))
+    # manager = GameManager(
+    #     connect_four,
+    #     MCTS(start, time_for_action=5.0, logg=True),
+    #     IOPlayer('int')
+    # )
+    # manager = GameManager(
+    #     connect_four,
+    #     IOPlayer('int'),
+    #     MCTS(start, time_for_action=5.0, logg=True)
+    # )
     manager.run_single_game()

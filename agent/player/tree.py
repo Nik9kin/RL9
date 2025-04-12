@@ -3,11 +3,8 @@ from typing import Any
 
 import numpy as np
 
+from agent.common import select_random_optimal_action
 from game.core.base import BasePlayer, BaseGameState, BaseGame
-
-
-def _choose_random_optimal_action(actions: list[Any], values: np.ndarray):
-    return actions[np.random.choice(np.argwhere(values == values.max()).flatten())]
 
 
 class DFSPlayer(BasePlayer):
@@ -40,7 +37,7 @@ class DFSPlayer(BasePlayer):
 
         actions = state.actions
         values = np.array([-self._state_value[state.next(a)] for a in actions])
-        return _choose_random_optimal_action(actions, values)
+        return select_random_optimal_action(values, actions)
 
     def _dfs(self, state: BaseGameState) -> int:
         if state not in self._state_value:
@@ -74,7 +71,7 @@ class BFSPlayer(BasePlayer):
 
         actions = state.actions
         values = np.array([-self._bfs(state, a, self.depth - 1) for a in actions])
-        return _choose_random_optimal_action(actions, values)
+        return select_random_optimal_action(values, actions)
 
     def _bfs(self, state: BaseGameState, action: Any, depth: int):
         state = state.next(action)
